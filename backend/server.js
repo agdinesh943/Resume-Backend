@@ -5,13 +5,13 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+require('dotenv').config();
 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 
-// For testing purposes, we'll use a mock transporter
 
 
 // const isTestingMode = process.env.NODE_ENV === 'development' || process.env.TESTING === 'true';
@@ -471,11 +471,12 @@ app.get('*', (req, res) => {
 
 
 app.listen(PORT, () => {
+    console.log('=================================');
+    console.log(`PORT from process.env: ${process.env.PORT || 'not set'}`);
+    console.log(`PORT being used: ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('=================================');
     console.log(`PDF generation server running on port ${PORT}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
-    console.log(`Root (redirects to login): http://localhost:${PORT}/`);
-    // console.log(`Student login: http://localhost:${PORT}/login`);
-    console.log(`Landing page: http://localhost:${PORT}/landing`);
-    console.log(`Resume form: http://localhost:${PORT}/resume-form`);
-    console.log(`Resume preview: http://localhost:${PORT}/preview`);
+    console.log(`API Test: http://localhost:${PORT}/api/test`);
 });
