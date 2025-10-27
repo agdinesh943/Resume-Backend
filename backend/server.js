@@ -120,14 +120,11 @@ app.post('/generate-pdf', async (req, res) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.header('Access-Control-Allow-Credentials', 'true');
 
-    // Log only in development
-    if (process.env.NODE_ENV !== 'production') {
-        console.log('PDF generation request received from origin:', req.headers.origin);
-        console.log('Request headers:', req.headers);
-        console.log('Current working directory:', process.cwd());
-        console.log('__dirname:', __dirname);
-        console.log('NODE_ENV:', process.env.NODE_ENV);
-    }
+    console.log('PDF generation request received from origin:', req.headers.origin);
+    console.log('Request headers:', req.headers);
+    console.log('Current working directory:', process.cwd());
+    console.log('__dirname:', __dirname);
+    console.log('NODE_ENV:', process.env.NODE_ENV);
 
     let browser;
     try {
@@ -219,12 +216,17 @@ app.post('/generate-pdf', async (req, res) => {
         let cssContent = fs.readFileSync(cssPath, 'utf8');
 
         // Fix image paths in CSS content as well
+        console.log('CSS content length before processing:', cssContent.length);
         const originalCssImages = cssContent.match(/url\(['"]?[^'"]*images[^'"]*['"]?\)/g) || [];
+        console.log('CSS image references found:', originalCssImages.length);
+        console.log('Sample CSS image references:', originalCssImages.slice(0, 3));
 
         cssContent = cssContent.replace(/url\(['"]?\.\/images\//g, `url('${baseUrl}/images/`);
         cssContent = cssContent.replace(/url\(['"]?images\//g, `url('${baseUrl}/images/`);
 
         const processedCssImages = cssContent.match(/url\(['"]?[^'"]*images[^'"]*['"]?\)/g) || [];
+        console.log('Processed CSS image references:', processedCssImages.length);
+        console.log('Sample processed CSS references:', processedCssImages.slice(0, 3));
 
         // Inject CSS content at the end of body to ensure it overrides template styles
         templateHtml = templateHtml.replace('<!-- CSS will be injected by server -->', '');
@@ -234,7 +236,10 @@ app.post('/generate-pdf', async (req, res) => {
         let processedHtml = html;
 
         // Fix image paths to use absolute URLs for proper loading
+        console.log('Base URL for images:', baseUrl);
         const originalImagePaths = processedHtml.match(/src="[^"]*images[^"]*"/g) || [];
+        console.log('Original image paths found:', originalImagePaths.length);
+        console.log('Sample original paths:', originalImagePaths.slice(0, 3));
 
         // Replace various image path patterns with absolute URLs for local file access
         // This doesn't affect base64 images (which start with 'data:')
@@ -248,12 +253,20 @@ app.post('/generate-pdf', async (req, res) => {
         processedHtml = processedHtml.replace(/src='images\//g, `src='${baseUrl}/images/`);
 
         const processedImagePaths = processedHtml.match(/src="[^"]*images[^"]*"/g) || [];
+        console.log('Processed image paths:', processedImagePaths.length);
+        console.log('Sample processed paths:', processedImagePaths.slice(0, 3));
 
         // Replace the placeholder with actual resume content
         templateHtml = templateHtml.replace('<!-- Resume content will be injected here -->', processedHtml);
 
         // Replace username placeholder in title
         templateHtml = templateHtml.replace('{{username}}', username);
+        console.log('Username replacement:', username);
+
+        // Debug: Log the HTML length to ensure content is being injected
+        console.log('HTML content length:', html.length);
+        console.log('Processed HTML length:', processedHtml.length);
+        console.log('Template HTML length:', templateHtml.length);
 
         // Set content with optimized loading strategy
         await page.setContent(templateHtml, {
@@ -269,9 +282,7 @@ app.post('/generate-pdf', async (req, res) => {
                         if (img.complete) return Promise.resolve({ src: img.src, loaded: true });
                         return new Promise((resolve) => {
                             const timeout = setTimeout(() => {
-                                if (process.env.NODE_ENV !== 'production') {
-                                    console.warn('Image load timeout:', img.src);
-                                }
+                                console.warn('Image load timeout:', img.src);
                                 resolve({ src: img.src, loaded: false, error: 'timeout' }); // Continue even if timeout
                             }, 10000); // 10 second timeout per image
 
@@ -281,9 +292,7 @@ app.post('/generate-pdf', async (req, res) => {
                             };
                             img.onerror = (error) => {
                                 clearTimeout(timeout);
-                                if (process.env.NODE_ENV !== 'production') {
-                                    console.warn('Image failed to load:', img.src, error);
-                                }
+                                console.warn('Image failed to load:', img.src, error);
                                 resolve({ src: img.src, loaded: false, error: 'load_error' }); // Continue even if some images fail
                             };
                         });
@@ -291,15 +300,13 @@ app.post('/generate-pdf', async (req, res) => {
                 );
             });
 
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('Image loading results:');
-                imageResults.forEach((result, index) => {
-                    console.log(`Image ${index + 1}: ${result.loaded ? '✅' : '❌'} ${result.src}`);
-                    if (!result.loaded) {
-                        console.log(`  Error: ${result.error}`);
-                    }
-                });
-            }
+            console.log('Image loading results:');
+            imageResults.forEach((result, index) => {
+                console.log(`Image ${index + 1}: ${result.loaded ? '✅' : '❌'} ${result.src}`);
+                if (!result.loaded) {
+                    console.log(`  Error: ${result.error}`);
+                }
+            });
 
         } catch (error) {
             console.warn('Image loading error, continuing:', error);
@@ -316,6 +323,7 @@ app.post('/generate-pdf', async (req, res) => {
         }
 
         // Generate PDF with exact A4 dimensions - no gaps
+        console.log('Starting PDF generation...');
         const pdfBuffer = await page.pdf({
             format: 'A4',
             printBackground: true,
@@ -331,6 +339,7 @@ app.post('/generate-pdf', async (req, res) => {
             width: '210mm',
             height: '297mm'
         });
+        console.log('PDF generated successfully, buffer size:', pdfBuffer.length);
 
         // Set response headers
         const filename = `resume_${username.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
@@ -338,6 +347,12 @@ app.post('/generate-pdf', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Pragma', 'no-cache');
+
+        // Debug: Check PDF buffer
+        console.log('PDF buffer type:', typeof pdfBuffer);
+        console.log('PDF buffer length:', pdfBuffer.length);
+        console.log('PDF buffer is Buffer:', Buffer.isBuffer(pdfBuffer));
+        console.log('PDF header:', pdfBuffer.slice(0, 8).toString());
 
         // Send PDF
         res.write(pdfBuffer);
@@ -456,20 +471,11 @@ app.get('*', (req, res) => {
 
 
 app.listen(PORT, () => {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const frontendUrl = isProduction
-        ? process.env.FRONTEND_URL || 'https://alliance-reume-maker.netlify.app'
-        : 'http://localhost:5173';
-    const backendUrl = isProduction
-        ? process.env.BACKEND_URL || 'https://resume-backend-kzg9.onrender.com'
-        : `http://localhost:${PORT}`;
-
     console.log(`PDF generation server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Backend URL: ${backendUrl}`);
-    console.log(`Frontend URL: ${frontendUrl}`);
-    if (!isProduction) {
-        console.log(`Health check: http://localhost:${PORT}/health`);
-        console.log(`API Test: http://localhost:${PORT}/api/test`);
-    }
+    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`Root (redirects to login): http://localhost:${PORT}/`);
+    // console.log(`Student login: http://localhost:${PORT}/login`);
+    console.log(`Landing page: http://localhost:${PORT}/landing`);
+    console.log(`Resume form: http://localhost:${PORT}/resume-form`);
+    console.log(`Resume preview: http://localhost:${PORT}/preview`);
 });
