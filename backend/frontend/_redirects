@@ -1,0 +1,7 @@
+# Netlify SPA Redirects
+# Redirect all routes to index.html for client-side routing
+/*    /index.html   200
+
+# Additional header configuration for security and caching
+/api/*  https://resume-maker-3-4n85.onrender.com/:splat  200
+
