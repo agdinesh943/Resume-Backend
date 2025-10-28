@@ -9,7 +9,7 @@ const resumeLogSchema = new mongoose.Schema({
   resumeCode: {
     type: String,
     required: true,
-    unique: true,
+    unique: true, // This already creates an index automatically
     trim: true
   },
   createdAt: {
@@ -19,9 +19,10 @@ const resumeLogSchema = new mongoose.Schema({
   }
 });
 
-// Index for faster queries
-resumeLogSchema.index({ resumeCode: 1 });
+// Index for faster queries by date (for sorting recent logs)
 resumeLogSchema.index({ createdAt: -1 });
+
+// Note: resumeCode already has a unique index automatically created by unique: true
 
 module.exports = mongoose.model('ResumeLog', resumeLogSchema);
 
