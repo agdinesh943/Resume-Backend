@@ -49,10 +49,43 @@ app.use(session({
     }
 }));
 
-// Function to generate a random 6-digit code with AU prefix
-function generateResumeCode() {
-    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-    return `AU${randomCode}`;
+// Function to generate a unique 6-digit code with AU prefix
+async function generateResumeCode() {
+    const maxAttempts = 10; // Prevent infinite loops
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+        const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const code = `AU${randomCode}`;
+
+        try {
+            // Check if code already exists in database
+            if (mongoose.connection.readyState === 1) {
+                const existingCode = await ResumeLog.findOne({ resumeCode: code });
+                if (!existingCode) {
+                    console.log(`✅ Generated unique resume code: ${code}`);
+                    return code;
+                } else {
+                    console.log(`⚠️  Code ${code} already exists, generating new one...`);
+                }
+            } else {
+                // If database not connected, return the code anyway
+                console.log(`⚠️  Database not connected, using code: ${code}`);
+                return code;
+            }
+        } catch (error) {
+            console.error(`Error checking code ${code}:`, error);
+            // If there's an error checking, return the code to avoid blocking
+            return code;
+        }
+
+        attempts++;
+    }
+
+    // Fallback: if we can't generate a unique code after max attempts
+    const fallbackCode = `AU${Date.now().toString().slice(-6)}`;
+    console.error(`⚠️  Could not generate unique code after ${maxAttempts} attempts, using timestamp-based code: ${fallbackCode}`);
+    return fallbackCode;
 }
 
 
@@ -102,7 +135,7 @@ app.post('/generate-pdf', async (req, res) => {
         const { html, username = 'Resume' } = req.body;
 
         // Generate a unique 6-digit code for this resume
-        resumeCode = generateResumeCode();
+        resumeCode = await generateResumeCode();
         console.log(`Generated resume code: ${resumeCode} for username: ${username}`);
 
         if (!html) {
