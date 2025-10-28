@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const session = require('express-session');
+const MongoDBStore = require('connect-mongo');
 require('dotenv').config();
 
 // Import ResumeLog model
@@ -31,12 +32,19 @@ const connectDB = async () => {
 connectDB();
 
 // Session configuration for admin authentication
+// Use MongoDB for session storage instead of MemoryStore (production-ready)
 app.use(session({
     secret: process.env.ADMIN_SESSION_SECRET || 'your-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
+    store: MongoDBStore.create({
+        mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/resume-tracker',
+        touchAfter: 24 * 3600, // lazy session update (in seconds)
+        ttl: 24 * 60 * 60 // session time-to-live in seconds (24 hours)
+    }),
     cookie: {
-        secure: false, // Set to true in production with HTTPS
+        secure: process.env.NODE_ENV === 'production', // Set to true in production with HTTPS
+        httpOnly: true, // Protect against XSS attacks
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
