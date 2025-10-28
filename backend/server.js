@@ -43,8 +43,9 @@ app.use(session({
         ttl: 24 * 60 * 60 // session time-to-live in seconds (24 hours)
     }),
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Set to true in production with HTTPS
+        secure: false, // Set to false to allow cookies on HTTP (needed for cross-origin)
         httpOnly: true, // Protect against XSS attacks
+        sameSite: 'lax', // Allow cross-origin cookies
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
@@ -93,7 +94,9 @@ async function generateResumeCode() {
 
 app.use(cors({
     origin: true, // Allow all origins temporarily
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
 // Additional CORS handling for preflight requests
@@ -112,9 +115,19 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Middleware to check admin authentication
 const requireAdmin = (req, res, next) => {
+    console.log('🔐 Checking admin access:', {
+        hasSession: !!req.session,
+        isAdmin: req.session?.isAdmin,
+        path: req.path,
+        cookies: req.headers.cookie
+    });
+
     if (req.session && req.session.isAdmin) {
+        console.log('✅ Admin access granted');
         return next();
     }
+
+    console.log('❌ Admin access denied - returning 401');
     return res.status(401).json({ success: false, message: 'Unauthorized' });
 };
 
@@ -433,14 +446,21 @@ app.get('/api/test', (req, res) => {
 
 // Admin Login API
 app.post('/api/admin-login', (req, res) => {
+    // Set CORS headers for credentials
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
     const { username, password } = req.body;
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     if (username === adminUsername && password === adminPassword) {
         req.session.isAdmin = true;
+        console.log('✅ Admin login successful, session set:', req.session.isAdmin);
         res.json({ success: true });
     } else {
+        console.log('❌ Admin login failed:', username);
         res.json({ success: false, message: 'Invalid credentials' });
     }
 });
