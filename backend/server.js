@@ -95,7 +95,7 @@ async function generateResumeCode() {
 app.use(cors({
     origin: true, // Allow all origins temporarily
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Token'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
@@ -103,7 +103,7 @@ app.use(cors({
 app.options('*', (req, res) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Admin-Token');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.sendStatus(200);
 });
@@ -454,7 +454,7 @@ app.post('/api/admin-login', (req, res) => {
     // Set CORS headers for credentials
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Token');
 
     const { username, password } = req.body;
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
@@ -573,61 +573,62 @@ app.post('/api/admin-validate-code', requireAdmin, async (req, res) => {
     }
 });
 
-// Debug endpoint to check file structure (PRODUCTION: Remove this endpoint)
-app.get('/api/debug', (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
+// Debug endpoint to check file structure (DISABLED IN PRODUCTION)
+if (process.env.NODE_ENV !== 'production') {
+    app.get('/api/debug', (req, res) => {
+        const fs = require('fs');
+        const path = require('path');
 
-    const debugInfo = {
-        cwd: process.cwd(),
-        __dirname: __dirname,
-        nodeEnv: process.env.NODE_ENV,
-        baseUrl: process.env.NODE_ENV === 'production'
-            ? 'https://resume-backend-kzg9.onrender.com'
-            // ? 'https://test-resume-1akf.onrender.com'
-            : 'http://localhost:5000',
-        files: {
-            template: {
-                path: path.join(__dirname, 'templates', 'resume.html'),
-                exists: fs.existsSync(path.join(__dirname, 'templates', 'resume.html'))
-            },
-            css: {
-                path: path.join(__dirname, 'frontend', 'index.css'),
-                exists: fs.existsSync(path.join(__dirname, 'frontend', 'index.css'))
-            },
-            frontendDir: {
-                path: path.join(__dirname, 'frontend'),
-                exists: fs.existsSync(path.join(__dirname, 'frontend'))
-            },
-            imagesDir: {
-                path: path.join(__dirname, 'frontend', 'images'),
-                exists: fs.existsSync(path.join(__dirname, 'frontend', 'images'))
+        const debugInfo = {
+            cwd: process.cwd(),
+            __dirname: __dirname,
+            nodeEnv: process.env.NODE_ENV,
+            baseUrl: process.env.NODE_ENV === 'production'
+                ? 'https://resume-backend-kzg9.onrender.com'
+                // ? 'https://test-resume-1akf.onrender.com'
+                : 'http://localhost:5000',
+            files: {
+                template: {
+                    path: path.join(__dirname, 'templates', 'resume.html'),
+                    exists: fs.existsSync(path.join(__dirname, 'templates', 'resume.html'))
+                },
+                css: {
+                    path: path.join(__dirname, 'frontend', 'index.css'),
+                    exists: fs.existsSync(path.join(__dirname, 'frontend', 'index.css'))
+                },
+                frontendDir: {
+                    path: path.join(__dirname, 'frontend'),
+                    exists: fs.existsSync(path.join(__dirname, 'frontend'))
+                },
+                imagesDir: {
+                    path: path.join(__dirname, 'frontend', 'images'),
+                    exists: fs.existsSync(path.join(__dirname, 'frontend', 'images'))
+                }
             }
+        };
+
+        // Try to list directory contents
+        try {
+            debugInfo.frontendContents = fs.readdirSync(path.join(__dirname, 'frontend'));
+        } catch (e) {
+            debugInfo.frontendContents = `Error: ${e.message}`;
         }
-    };
 
-    // Try to list directory contents
-    try {
-        debugInfo.frontendContents = fs.readdirSync(path.join(__dirname, 'frontend'));
-    } catch (e) {
-        debugInfo.frontendContents = `Error: ${e.message}`;
-    }
+        try {
+            debugInfo.templatesContents = fs.readdirSync(path.join(__dirname, 'templates'));
+        } catch (e) {
+            debugInfo.templatesContents = `Error: ${e.message}`;
+        }
 
-    try {
-        debugInfo.templatesContents = fs.readdirSync(path.join(__dirname, 'templates'));
-    } catch (e) {
-        debugInfo.templatesContents = `Error: ${e.message}`;
-    }
+        try {
+            debugInfo.imagesContents = fs.readdirSync(path.join(__dirname, 'frontend', 'images'));
+        } catch (e) {
+            debugInfo.imagesContents = `Error: ${e.message}`;
+        }
 
-    try {
-        debugInfo.imagesContents = fs.readdirSync(path.join(__dirname, 'frontend', 'images'));
-    } catch (e) {
-        debugInfo.imagesContents = `Error: ${e.message}`;
-    }
-
-    res.json(debugInfo);
-});
-
+        res.json(debugInfo);
+    });
+}
 // Catch-all handler: send back index.html for any non-API routes (SPA behavior)
 app.get('*', (req, res) => {
     // Skip API routes
