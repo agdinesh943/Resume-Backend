@@ -113,16 +113,21 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files from frontend directory
 app.use(express.static(path.join(__dirname, 'frontend')));
 
+// Simple in-memory admin tokens (for cross-origin support)
+// In production, consider using JWT tokens or similar
+const activeAdminTokens = new Set();
+
 // Middleware to check admin authentication
 const requireAdmin = (req, res, next) => {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-admin-token'];
+
     console.log('🔐 Checking admin access:', {
-        hasSession: !!req.session,
-        isAdmin: req.session?.isAdmin,
-        path: req.path,
-        cookies: req.headers.cookie
+        hasToken: !!token,
+        tokenValid: token ? activeAdminTokens.has(token) : false,
+        path: req.path
     });
 
-    if (req.session && req.session.isAdmin) {
+    if (token && activeAdminTokens.has(token)) {
         console.log('✅ Admin access granted');
         return next();
     }
@@ -456,9 +461,12 @@ app.post('/api/admin-login', (req, res) => {
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     if (username === adminUsername && password === adminPassword) {
-        req.session.isAdmin = true;
-        console.log('✅ Admin login successful, session set:', req.session.isAdmin);
-        res.json({ success: true });
+        // Generate a secure token
+        const token = crypto.randomBytes(32).toString('hex');
+        activeAdminTokens.add(token);
+
+        console.log('✅ Admin login successful, token issued');
+        res.json({ success: true, token });
     } else {
         console.log('❌ Admin login failed:', username);
         res.json({ success: false, message: 'Invalid credentials' });
@@ -466,13 +474,13 @@ app.post('/api/admin-login', (req, res) => {
 });
 
 // Admin Logout
-app.get('/api/admin-logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error('Session destruction error:', err);
-        }
-        res.json({ success: true });
-    });
+app.post('/api/admin-logout', (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-admin-token'];
+    if (token && activeAdminTokens.has(token)) {
+        activeAdminTokens.delete(token);
+        console.log('✅ Admin logged out, token removed');
+    }
+    res.json({ success: true });
 });
 
 // API endpoint to get logs as JSON (alternative to HTML view)
