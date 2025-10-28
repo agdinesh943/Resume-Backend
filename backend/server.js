@@ -486,12 +486,18 @@ app.post('/api/admin-logout', (req, res) => {
 // API endpoint to get logs as JSON (alternative to HTML view)
 app.get('/api/admin-logs', requireAdmin, async (req, res) => {
     try {
+        console.log('📋 Admin logs requested');
         let logs = [];
         if (mongoose.connection.readyState === 1) {
+            console.log('📋 Database connected, fetching logs...');
             logs = await ResumeLog.find().sort({ createdAt: -1 });
+            console.log('📋 Logs fetched:', logs.length, 'entries');
+        } else {
+            console.log('❌ Database not connected for logs');
         }
         res.json({ success: true, logs, count: logs.length });
     } catch (error) {
+        console.error('❌ Error in admin-logs:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -499,8 +505,11 @@ app.get('/api/admin-logs', requireAdmin, async (req, res) => {
 // API endpoint to get aggregated user stats
 app.get('/api/admin-user-stats', requireAdmin, async (req, res) => {
     try {
+        console.log('📊 Admin user stats requested');
         let userStats = [];
+
         if (mongoose.connection.readyState === 1) {
+            console.log('📊 Database connected, fetching stats...');
             // Aggregate data by username
             const stats = await ResumeLog.aggregate([
                 {
@@ -524,9 +533,15 @@ app.get('/api/admin-user-stats', requireAdmin, async (req, res) => {
                 firstGenerated: stat.firstGenerated,
                 lastGenerated: stat.lastGenerated
             }));
+
+            console.log('📊 Stats fetched:', userStats.length, 'users');
+        } else {
+            console.log('❌ Database not connected');
         }
+
         res.json({ success: true, userStats, count: userStats.length });
     } catch (error) {
+        console.error('❌ Error in admin-user-stats:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
