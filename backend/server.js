@@ -110,8 +110,11 @@ app.options('*', (req, res) => {
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from frontend directory
-app.use(express.static(path.join(__dirname, 'frontend')));
+// Serve static files from frontend directory (only in development)
+// In production, frontend is served separately by Netlify
+if (process.env.NODE_ENV !== 'production') {
+    app.use(express.static(path.join(__dirname, 'frontend')));
+}
 
 // Simple in-memory admin tokens (for cross-origin support)
 // In production, consider using JWT tokens or similar
@@ -405,25 +408,29 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Serve the main landing page at /landing
-app.get('/landing-page', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
-});
+// Serve frontend routes (only in development)
+// In production, frontend is served separately by Netlify
+if (process.env.NODE_ENV !== 'production') {
+    // Serve the main landing page at /landing
+    app.get('/landing-page', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
+    });
 
-app.get('/', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
-});
+    // Serve root/index page
+    app.get('/', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
+    });
 
+    // Resume form endpoint
+    app.get('/resume-form', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'frontend', 'resume-form.html'));
+    });
 
-// Resume form endpoint
-app.get('/resume-form', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'frontend', 'resume-form.html'));
-});
-
-// Resume preview endpoint
-app.get('/preview', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'frontend', 'preview.html'));
-});
+    // Resume preview endpoint
+    app.get('/preview', (req, res) => {
+        res.sendFile(path.resolve(__dirname, 'frontend', 'preview.html'));
+    });
+}
 
 app.get('/api/test', (req, res) => {
     res.json({ status: "Backend is live!" });
@@ -619,15 +626,30 @@ if (process.env.NODE_ENV !== 'production') {
     });
 }
 // Catch-all handler: send back index.html for any non-API routes (SPA behavior)
-app.get('*', (req, res) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/') || req.path.startsWith('/generate-pdf')) {
-        return res.status(404).json({ error: 'API endpoint not found' });
-    }
+// Only in development - in production, frontend is served separately by Netlify
+if (process.env.NODE_ENV !== 'production') {
+    app.get('*', (req, res) => {
+        // Skip API routes
+        if (req.path.startsWith('/api/') || req.path.startsWith('/generate-pdf')) {
+            return res.status(404).json({ error: 'API endpoint not found' });
+        }
 
-    // Serve index.html for all other routes
-    res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
-});
+        // Serve index.html for all other routes
+        res.sendFile(path.resolve(__dirname, 'frontend', 'index.html'));
+    });
+} else {
+    // In production, only handle API routes - return 404 for everything else
+    app.get('*', (req, res) => {
+        // Skip API routes - they're handled above
+        if (!req.path.startsWith('/api/') && !req.path.startsWith('/generate-pdf') && req.path !== '/health') {
+            return res.status(404).json({
+                error: 'Not found',
+                message: 'This is an API server. Please access the frontend at your Netlify URL.'
+            });
+        }
+        return res.status(404).json({ error: 'API endpoint not found' });
+    });
+}
 
 
 app.listen(PORT, () => {
