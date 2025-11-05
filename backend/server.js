@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoDBStore = require('connect-mongo');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 // Import ResumeLog model
@@ -116,18 +117,31 @@ if (process.env.NODE_ENV !== 'production') {
     app.use(express.static(path.join(__dirname, 'frontend')));
 }
 
-// Simple in-memory admin tokens (for cross-origin support)
-// In production, consider using JWT tokens or similar
-const activeAdminTokens = new Set();
+// JWT Secret for admin authentication
+const JWT_SECRET = process.env.JWT_SECRET || process.env.ADMIN_SESSION_SECRET || 'your-secret-key-change-in-production';
 
-// Middleware to check admin authentication
+// Middleware to check admin authentication using JWT
 const requireAdmin = (req, res, next) => {
     const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-admin-token'];
 
-    if (token && activeAdminTokens.has(token)) {
-        return next();
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    try {
+        // Verify JWT token
+        const decoded = jwt.verify(token, JWT_SECRET);
+        // Attach decoded token info to request for use in routes if needed
+        req.admin = decoded;
+        return next();
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Token expired' });
+        } else if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
+        }
+        return res.status(401).json({ success: false, message: 'Unauthorized: Token verification failed' });
+    }
 };
 
 app.post('/generate-pdf', async (req, res) => {
@@ -450,11 +464,17 @@ app.post('/api/admin-login', (req, res) => {
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     if (username === adminUsername && password === adminPassword) {
-        // Generate a secure token
-        const token = crypto.randomBytes(32).toString('hex');
-        activeAdminTokens.add(token);
+        // Generate JWT token with 24 hour expiration
+        const token = jwt.sign(
+            {
+                username: adminUsername,
+                type: 'admin'
+            },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
 
-        console.log('✅ Admin login successful, token issued');
+        console.log('✅ Admin login successful, JWT token issued');
         res.json({ success: true, token });
     } else {
         console.log('❌ Admin login failed:', username);
@@ -463,13 +483,13 @@ app.post('/api/admin-login', (req, res) => {
 });
 
 // Admin Logout
+// Note: With JWT, logout is typically handled client-side by removing the token
+// This endpoint is kept for consistency and can be used to invalidate tokens if needed
 app.post('/api/admin-logout', (req, res) => {
-    const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-admin-token'];
-    if (token && activeAdminTokens.has(token)) {
-        activeAdminTokens.delete(token);
-        console.log('✅ Admin logged out, token removed');
-    }
-    res.json({ success: true });
+    // With stateless JWT, we don't need to track tokens server-side
+    // The client should remove the token from localStorage
+    console.log('✅ Admin logged out (client should remove token)');
+    res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // API endpoint to get logs as JSON (alternative to HTML view)
